@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 import threading
 from datetime import datetime, timedelta
@@ -92,19 +93,64 @@ class BundleService:
             self.state.expiry_ts = (datetime.now() + timedelta(hours=self.config.default_bundle_valid_hours)).timestamp()
         self.storage.save_state(self.state)
 
+    def _get_odido_api(self):
+        """Create an Odido API client using configured credentials."""
+        from .odido_api import OdidoAPI
+        return OdidoAPI(
+            user_id=self.config.odido_user_id or os.getenv("ODIDO_USER_ID"),
+            access_token=self.config.odido_token or os.getenv("ODIDO_TOKEN"),
+        )
+
+    def _renew_with_real_api(self) -> bool:
+        """Attempt to renew bundle using the real Odido API."""
+        from .odido_api import OdidoAPIError, OdidoAuthError
+        
+        api = self._get_odido_api()
+        if not api.is_configured:
+            self._log("ERROR", "Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables")
+            return False
+        
+        try:
+            buying_code = self.config.bundle_code
+            result = api.buy_bundle(buying_code=buying_code)
+            if result.get("success"):
+                self._log("INFO", f"Bundle purchased via Odido API with code: {buying_code}")
+                # Update local state with the configured bundle size
+                self._add_bundle(self.config.bundle_size_mb)
+                return True
+            else:
+                self._log("WARNING", f"Odido API purchase returned unexpected result: {result}")
+                return False
+        except OdidoAuthError as e:
+            self._log("ERROR", f"Odido API authentication failed: {e}")
+            return False
+        except OdidoAPIError as e:
+            self._log("ERROR", f"Odido API error: {e}")
+            return False
+        except Exception as e:
+            self._log("ERROR", f"Unexpected error during Odido API renewal: {e}")
+            return False
+
     def _renew_with_retry(self) -> None:
+        """
+        Attempt to renew bundle via the Odido API with up to 3 retries using exponential backoff.
+        
+        Returns without action if all attempts fail. Check logs for error details.
+        """
         retries = 3
         backoff = 2
-        attempt = 0
-        while attempt < retries:
+        
+        for attempt in range(retries):
             try:
-                self._add_bundle(self.config.bundle_size_mb)
-                self._log("INFO", f"Auto-renewed bundle (+{self.config.bundle_size_mb} MB)")
-                return
+                if self._renew_with_real_api():
+                    return
             except Exception as exc:  # pragma: no cover
                 self._log("ERROR", f"Renewal attempt {attempt+1} failed: {exc}")
+            
+            if attempt < retries - 1:
                 time.sleep(backoff ** attempt)
-                attempt += 1
+        
+        self._log("ERROR", "All renewal attempts failed - check Odido API credentials and network connectivity")
 
     def compute_consumption_rate(self) -> float:
         window_start = time.time() - (self.config.estimator_window_minutes * 60)

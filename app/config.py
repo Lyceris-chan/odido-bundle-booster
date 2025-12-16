@@ -6,6 +6,7 @@ from typing import Optional
 
 
 DEFAULT_API_KEY = os.getenv("API_KEY") or os.getenv("ODIDO_API_KEY")
+DEFAULT_BUNDLE_CODE = "A0DAY01"
 
 
 @dataclass
@@ -21,13 +22,17 @@ class AppConfig:
     auto_renew_enabled: bool = True
     default_bundle_valid_hours: int = 24 * 30
     log_level: str = "INFO"
+    # Odido API integration settings
+    bundle_code: str = DEFAULT_BUNDLE_CODE
+    odido_user_id: Optional[str] = None
+    odido_token: Optional[str] = None
 
     def update_from_dict(self, data: dict) -> None:
         for key, value in data.items():
             if not hasattr(self, key):
                 continue
-            if key in {"api_key", "log_level"}:
-                setattr(self, key, str(value))
+            if key in {"api_key", "log_level", "bundle_code", "odido_user_id", "odido_token"}:
+                setattr(self, key, str(value) if value is not None else None)
             elif key in {
                 "bundle_size_mb",
                 "absolute_min_threshold_mb",
@@ -39,7 +44,7 @@ class AppConfig:
                 "default_bundle_valid_hours",
             }:
                 setattr(self, key, float(value) if "mb" in key else int(value))
-            elif key == "auto_renew_enabled":
+            elif key in {"auto_renew_enabled"}:
                 setattr(self, key, bool(value))
 
     def as_dict(self) -> dict:
