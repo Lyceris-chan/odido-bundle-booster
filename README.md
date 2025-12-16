@@ -19,8 +19,8 @@ Environment variables:
 - `PORT` (default 80): API port.
 - `APP_DB_PATH` (default `/data/odido.db`): SQLite location.
 - `APP_DATA_DIR` (default `/data`): data directory.
-- `ODIDO_USER_ID`: Your Odido user ID (required for real API integration).
-- `ODIDO_TOKEN`: Your Odido access token (required for real API integration).
+- `ODIDO_USER_ID`: Your Odido user ID (**required** for auto-renewal and API endpoints).
+- `ODIDO_TOKEN`: Your Odido access token (**required** for auto-renewal and API endpoints).
 
 Runtime configuration via `POST /api/config` (all optional fields):
 - `api_key`: replace the API key.
@@ -37,7 +37,6 @@ Runtime configuration via `POST /api/config` (all optional fields):
 - `bundle_code` (default "A0DAY01"): The bundle buying code for auto-renewal.
 - `odido_user_id`: Odido user ID (can also be set via environment variable).
 - `odido_token`: Odido access token (can also be set via environment variable).
-- `use_real_odido_api` (default false): Enable real Odido API for auto-renewal.
 
 ## API
 All endpoints expect header `X-API-Key` matching the configured value.
@@ -64,10 +63,11 @@ Common bundle buying codes (may vary based on subscription):
 - `A0DAY01` – 2GB daily bundle (default)
 - `A0DAY05` – 5GB daily bundle
 
+**Note**: The Odido API does not provide an endpoint to list all available bundle codes. The codes above are based on the reference implementations ([ha-odido-mobile](https://github.com/arjenbos/ha-odido-mobile), [odido-aap](https://github.com/ink-splatters/odido-aap)). Your available codes may vary based on your subscription.
+
 You can set the bundle code via:
-1. Environment variable is not directly supported; use the API config endpoint.
-2. Runtime configuration: `POST /api/config` with `{"bundle_code": "A0DAY05"}`
-3. Per-request: `POST /api/odido/buy-bundle` with `{"buying_code": "A0DAY05"}`
+1. Runtime configuration: `POST /api/config` with `{"bundle_code": "A0DAY05"}`
+2. Per-request: `POST /api/odido/buy-bundle` with `{"buying_code": "A0DAY05"}`
 
 ## Adaptive scheduling
 - Consumption rate estimated as MB/min over the recent window (default last 60 minutes, capped at 24 events).
@@ -97,17 +97,17 @@ docker run -p 80:80 --name odido-api \
 # Health
 curl -X POST http://localhost/api/health
 
-# Configure with bundle code and enable real API
+# Configure with bundle code
 curl -X POST http://localhost/api/config \
   -H 'X-API-Key: changeme' \
   -H 'Content-Type: application/json' \
-  -d '{"bundle_code":"A0DAY01","use_real_odido_api":true}'
+  -d '{"bundle_code":"A0DAY01"}'
 
 # Fetch available bundles from Odido
 curl -X GET http://localhost/api/odido/bundles \
   -H 'X-API-Key: changeme'
 
-# Get available bundle codes
+# Get known bundle codes
 curl -X GET http://localhost/api/odido/bundle-codes \
   -H 'X-API-Key: changeme'
 
@@ -121,7 +121,7 @@ curl -X POST http://localhost/api/odido/buy-bundle \
 curl -X GET http://localhost/api/odido/remaining \
   -H 'X-API-Key: changeme'
 
-# Simulate usage (for testing)
+# Simulate usage (for testing without real API calls)
 curl -X POST http://localhost/api/simulate-usage \
   -H 'X-API-Key: changeme' \
   -H 'Content-Type: application/json' \
@@ -129,9 +129,9 @@ curl -X POST http://localhost/api/simulate-usage \
 ```
 
 ## Obtaining Odido Credentials
-To use the real Odido API integration, you need to obtain your Odido user ID and access token. See the [odido-aap](https://github.com/ink-splatters/odido-aap) project for instructions on extracting credentials from the Odido mobile app.
+To use the Odido API integration, you need to obtain your Odido user ID and access token. See the [odido-aap](https://github.com/ink-splatters/odido-aap) project for instructions on extracting credentials from the Odido mobile app.
 
 ## Notes
-- When `use_real_odido_api` is enabled, auto-renewal will attempt to purchase bundles via the Odido API. If the API call fails, it falls back to simulated renewal.
-- The Odido API does not provide an endpoint to list all available bundle codes; the known codes are based on reference implementations.
+- Auto-renewal requires valid Odido API credentials (`ODIDO_USER_ID` and `ODIDO_TOKEN`). If credentials are not configured, auto-renewal will fail with an error.
+- The Odido API does not provide an endpoint to dynamically fetch available bundle codes; the known codes are based on reference implementations.
 - Default values are conservative to avoid premature renewals; tune via configuration to match production usage profiles.

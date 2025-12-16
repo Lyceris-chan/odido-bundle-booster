@@ -26,7 +26,6 @@ class AppConfig:
     bundle_code: str = DEFAULT_BUNDLE_CODE
     odido_user_id: Optional[str] = None
     odido_token: Optional[str] = None
-    use_real_odido_api: bool = False
 
     def update_from_dict(self, data: dict) -> None:
         for key, value in data.items():
@@ -45,7 +44,7 @@ class AppConfig:
                 "default_bundle_valid_hours",
             }:
                 setattr(self, key, float(value) if "mb" in key else int(value))
-            elif key in {"auto_renew_enabled", "use_real_odido_api"}:
+            elif key in {"auto_renew_enabled"}:
                 setattr(self, key, bool(value))
 
     def as_dict(self) -> dict:

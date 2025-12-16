@@ -107,7 +107,7 @@ class BundleService:
         
         api = self._get_odido_api()
         if not api.is_configured:
-            self._log("WARNING", "Odido API not configured, falling back to simulated renewal")
+            self._log("ERROR", "Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables")
             return False
         
         try:
@@ -132,33 +132,25 @@ class BundleService:
             return False
 
     def _renew_with_retry(self) -> None:
+        """
+        Attempt to renew bundle via the Odido API with up to 3 retries using exponential backoff.
+        
+        Returns without action if all attempts fail. Check logs for error details.
+        """
         retries = 3
         backoff = 2
-        attempt = 0
         
-        # Try real Odido API first if enabled
-        if self.config.use_real_odido_api:
-            while attempt < retries:
-                try:
-                    if self._renew_with_real_api():
-                        return
-                except Exception as exc:  # pragma: no cover
-                    self._log("ERROR", f"Real API renewal attempt {attempt+1} failed: {exc}")
-                time.sleep(backoff ** attempt)
-                attempt += 1
-            self._log("WARNING", "All Odido API renewal attempts failed, falling back to simulated renewal")
-            attempt = 0
-        
-        # Fallback to simulated renewal
-        while attempt < retries:
+        for attempt in range(retries):
             try:
-                self._add_bundle(self.config.bundle_size_mb)
-                self._log("INFO", f"Auto-renewed bundle (simulated) (+{self.config.bundle_size_mb} MB)")
-                return
+                if self._renew_with_real_api():
+                    return
             except Exception as exc:  # pragma: no cover
-                self._log("ERROR", f"Simulated renewal attempt {attempt+1} failed: {exc}")
+                self._log("ERROR", f"Renewal attempt {attempt+1} failed: {exc}")
+            
+            if attempt < retries - 1:
                 time.sleep(backoff ** attempt)
-                attempt += 1
+        
+        self._log("ERROR", "All renewal attempts failed - check Odido API credentials and network connectivity")
 
     def compute_consumption_rate(self) -> float:
         window_start = time.time() - (self.config.estimator_window_minutes * 60)
