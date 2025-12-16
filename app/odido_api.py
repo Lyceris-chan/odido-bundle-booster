@@ -9,6 +9,7 @@ This module provides functionality to:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -133,7 +134,7 @@ class OdidoAPI:
 
         try:
             return response.json()
-        except ValueError:
+        except json.JSONDecodeError:
             if require_json:
                 raise OdidoAPIError(f"Expected JSON response, got: {response.text}")
             return {"raw": response.text}
