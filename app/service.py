@@ -116,7 +116,8 @@ class BundleService:
             if result.get("success"):
                 self._log("INFO", f"Bundle purchased via Odido API with code: {buying_code}")
                 # Update local state with the configured bundle size
-                self._add_bundle(self.config.bundle_size_mb)
+                with self._lock:
+                    self._add_bundle(self.config.bundle_size_mb)
                 return True
             else:
                 self._log("WARNING", f"Odido API purchase returned unexpected result: {result}")
@@ -188,8 +189,14 @@ class BundleService:
             self._apply_daily_reset_if_needed()
             rate = self.compute_consumption_rate()
             eta = self.estimated_time_to_depletion_minutes(rate)
-            if self.should_auto_renew(rate):
-                self._renew_with_retry()
+            should_renew = self.should_auto_renew(rate)
+
+        if should_renew:
+            self._renew_with_retry()
+            with self._lock:
+                eta = self.estimated_time_to_depletion_minutes(rate)
+
+        with self._lock:
             next_interval_minutes = self.compute_next_check_minutes(rate)
             next_check_ts = time.time() + (next_interval_minutes * 60)
             self.state.last_check_ts = time.time()
