@@ -7,14 +7,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=80
 
 RUN apk add --no-cache su-exec sqlite-libs sqlite-dev build-base libcap \
-    && setcap 'cap_net_bind_service=+ep' /usr/local/bin/python3
+    && setcap 'cap_net_bind_service=+ep' $(readlink -f /usr/local/bin/python3)
 
 WORKDIR $APP_DIR
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
-COPY entrypoint.sh ./
+COPY entrypoint.sh /entrypoint.sh
 
 EXPOSE 80
 
